@@ -1,0 +1,6 @@
+gcc sync.c stk.c sched.c key.c aaaaa.c asm/make_gas.S asm/jump_gas.S -o aaa -DCYGWIN64 -DMD_HAVE_SELECT -I.
+
+
+gcc sync.c stk.c sched.c key.c aaaaa.c asm/make_gas.S asm/jump_gas.S -o aaa -DCYGWIN64 -DMD_HAVE_SELECT -I. -I./include -DWIN32_LEAN_AND_MEAN -L. -luv -lws2_32 -liphlpapi -ladvapi32 -lpsapi -luser32 -luserenv
+
+
