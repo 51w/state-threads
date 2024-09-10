@@ -45,10 +45,9 @@
 #define __ST_COMMON_H__
 
 #include <stddef.h>
-#include <unistd.h>
 #include <sys/types.h>
-#include <sys/time.h>
-#include <setjmp.h>
+// #include <sys/time.h>
+// #include <setjmp.h>
 
 /* Enable assertions only if DEBUG is defined */
 #ifndef DEBUG
@@ -67,7 +66,6 @@
 #endif
 
 #include "public.h"
-#include "md.h"
 
 /* merge from https://github.com/toffaletti/state-threads/commit/7f57fc9acc05e657bca1223f1e5b9b1a45ed929b */
 #ifndef MD_VALGRIND
@@ -146,6 +144,17 @@ typedef struct _st_clist {
  * Basic types definitions
  */
 
+/////////////////////////////////////////
+
+typedef void* fcontext_t;
+typedef struct {
+    fcontext_t  fctx;
+    void* data;
+} transfer_t;
+
+/////////////////////////////////////////
+
+
 typedef void  (*_st_destructor_t)(void *);
 
 
@@ -197,7 +206,8 @@ struct _st_thread {
 
     _st_cond_t *term;           /* Termination condition variable for join */
 
-    _st_jmp_buf_t context;            /* Thread's context */
+    // _st_jmp_buf_t context;            /* Thread's context */
+    fcontext_t fcontext;
 };
 
 
@@ -205,29 +215,6 @@ typedef struct _st_mutex {
     _st_thread_t *owner;        /* Current mutex owner */
     _st_clist_t  wait_q;        /* Mutex wait queue */
 } _st_mutex_t;
-
-
-typedef struct _st_pollq {
-    _st_clist_t links;          /* For putting on io queue */
-    _st_thread_t  *thread;      /* Polling thread */
-    struct pollfd *pds;         /* Array of poll descriptors */
-    int npds;                   /* Length of the array */
-    int on_ioq;                 /* Is it on ioq? */
-} _st_pollq_t;
-
-
-typedef struct _st_eventsys_ops {
-    const char *name;                          /* Name of this event system */
-    int  val;                                  /* Type of this event system */
-    int  (*init)(void);                        /* Initialization */
-    void (*dispatch)(void);                    /* Dispatch function */
-    int  (*pollset_add)(struct pollfd *, int); /* Add descriptor set */
-    void (*pollset_del)(struct pollfd *, int); /* Delete descriptor set */
-    int  (*fd_new)(int);                       /* New descriptor allocated */
-    int  (*fd_close)(int);                     /* Descriptor closed */
-    int  (*fd_getlimit)(void);                 /* Descriptor hard limit */
-    void (*destroy)(void);                     /* Destroy the event object */
-} _st_eventsys_t;
 
 
 typedef struct _st_vp {
@@ -252,23 +239,12 @@ typedef struct _st_vp {
 } _st_vp_t;
 
 
-typedef struct _st_netfd {
-    int osfd;                   /* Underlying OS file descriptor */
-    int inuse;                  /* In-use flag */
-    void *private_data;         /* Per descriptor private data */
-    _st_destructor_t destructor; /* Private data destructor function */
-    void *aux_data;             /* Auxiliary data for internal use */
-    struct _st_netfd *next;     /* For putting on the free list */
-} _st_netfd_t;
-
-
 /*****************************************
  * Current vp, thread, and event system
  */
 
 extern __thread _st_vp_t        _st_this_vp;
 extern __thread _st_thread_t *_st_this_thread;
-extern __thread _st_eventsys_t *_st_eventsys;
 
 #define _ST_CURRENT_THREAD()            (_st_this_thread)
 #define _ST_SET_CURRENT_THREAD(_thread) (_st_this_thread = (_thread))
@@ -287,7 +263,6 @@ extern __thread _st_eventsys_t *_st_eventsys;
 #define _ST_SLEEPQ                      (_st_this_vp.sleep_q)
 #define _ST_SLEEPQ_SIZE                 (_st_this_vp.sleepq_size)
 
-#define _ST_VP_IDLE()                   (*_st_eventsys->dispatch)()
 
 
 /*****************************************
@@ -407,42 +382,45 @@ extern __thread _st_eventsys_t *_st_eventsys;
     #define ST_SWITCH_IN_CB(_thread)
 #endif
 
-/*
- * Switch away from the current thread context by saving its state and
- * calling the thread scheduler
- */
+
+////////////////////////////////////////////
+extern transfer_t jump_fcontext(fcontext_t const to, void * vp);
+extern fcontext_t make_fcontext(void * sp, size_t size, void (* fn)( transfer_t));
+
 #define _ST_SWITCH_CONTEXT(_thread)       \
     ST_BEGIN_MACRO                        \
     ST_SWITCH_OUT_CB(_thread);            \
-    if (!MD_SETJMP((_thread)->context)) { \
-        _st_vp_schedule();                  \
-    }                                     \
-    ST_DEBUG_ITERATE_THREADS();           \
+    _st_vp_schedule(_thread); 	  		  \
     ST_SWITCH_IN_CB(_thread);             \
     ST_END_MACRO
 
-/*
- * Restore a thread context that was saved by _ST_SWITCH_CONTEXT or
- * initialized by _ST_INIT_CONTEXT
- */
-#define _ST_RESTORE_CONTEXT(_thread)   \
-    ST_BEGIN_MACRO                     \
-    _ST_SET_CURRENT_THREAD(_thread);   \
-    MD_LONGJMP((_thread)->context, 1); \
+#define _ST_RESTORE_CONTEXT(_from, _to)  	 \
+    ST_BEGIN_MACRO                    		 \
+    _ST_SET_CURRENT_THREAD(_to);   			 \
+    if(_from->fcontext != _to->fcontext) {	 \
+    transfer_t _info = jump_fcontext(_to->fcontext, (void*)_from); \
+    _st_thread_t* thread = (_st_thread_t*)_info.data; \
+	thread->fcontext = _info.fctx; }				  \
     ST_END_MACRO
 
-/*
- * Initialize the thread context preparing it to execute _main
- */
-#ifdef MD_INIT_CONTEXT
-    #define _ST_INIT_CONTEXT MD_INIT_CONTEXT
-#else
-    #error Unknown OS
-#endif
+#define _ST_INIT_CONTEXT(_thread, _sp, stk_size, _main)      \
+    ST_BEGIN_MACRO                            			     \
+    _thread->fcontext = make_fcontext(_sp, stk_size, _main); \
+    ST_END_MACRO
+
+////////////////////////////////////////////
+
 
 /*
  * Number of bytes reserved under the stack "bottom"
  */
+ #ifndef MD_CAP_STACK
+    #define MD_CAP_STACK(var_addr)
+#endif
+#ifndef MD_STACK_PAD_SIZE
+    #define MD_STACK_PAD_SIZE 128
+#endif
+
 #define _ST_STACK_PAD_SIZE MD_STACK_PAD_SIZE
 
 
@@ -450,7 +428,7 @@ extern __thread _st_eventsys_t *_st_eventsys;
  * Forward declarations
  */
 
-void _st_vp_schedule(void);
+void _st_vp_schedule(_st_thread_t* from);
 void _st_vp_check_clock(void);
 void *_st_idle_thread_start(void *arg);
 void _st_thread_main(void);
@@ -459,16 +437,13 @@ void _st_add_sleep_q(_st_thread_t *thread, st_utime_t timeout);
 void _st_del_sleep_q(_st_thread_t *thread);
 _st_stack_t *_st_stack_new(int stack_size);
 void _st_stack_free(_st_stack_t *ts);
-int _st_io_init(void);
 
 st_utime_t st_utime(void);
 _st_cond_t *st_cond_new(void);
 int st_cond_destroy(_st_cond_t *cvar);
 int st_cond_timedwait(_st_cond_t *cvar, st_utime_t timeout);
 int st_cond_signal(_st_cond_t *cvar);
-ssize_t st_read(_st_netfd_t *fd, void *buf, size_t nbyte, st_utime_t timeout);
-ssize_t st_write(_st_netfd_t *fd, const void *buf, size_t nbyte, st_utime_t timeout);
-int st_poll(struct pollfd *pds, int npds, st_utime_t timeout);
+
 _st_thread_t *st_thread_create(void *(*start)(void *arg), void *arg, int joinable, int stk_size);
 
 #endif /* !__ST_COMMON_H__ */

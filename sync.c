@@ -40,7 +40,9 @@
  * This file is derived directly from Netscape Communications Corporation,
  * and consists of extensive modifications made during the year(s) 1999-2000.
  */
-
+#ifndef MD_GET_UTIME
+#include <windows.h>
+#endif
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
@@ -64,7 +66,16 @@ st_utime_t st_utime(void)
 #ifdef MD_GET_UTIME
         MD_GET_UTIME();
 #else
-#error Unknown OS
+        const time_t epoch = (time_t)116444736000000000ULL;
+        FILETIME file_time;
+        ULARGE_INTEGER ularge;
+
+        GetSystemTimeAsFileTime(&file_time);
+        ularge.LowPart = file_time.dwLowDateTime;
+        ularge.HighPart = file_time.dwHighDateTime;
+        time_t tv_sec = (time_t)((ularge.QuadPart - epoch) / 10000000L);
+        time_t tv_usec = (time_t)(((ularge.QuadPart - epoch) % 10000000L) / 10);
+        return tv_sec*1000000 + tv_usec;
 #endif
     }
     
