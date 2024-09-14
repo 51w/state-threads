@@ -40,7 +40,12 @@
  * This file is derived directly from Netscape Communications Corporation,
  * and consists of extensive modifications made during the year(s) 1999-2000.
  */
-
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
@@ -61,10 +66,21 @@ static st_utime_t (*_st_utime)(void) = NULL;
 st_utime_t st_utime(void)
 {
     if (_st_utime == NULL) {
-#ifdef MD_GET_UTIME
-        MD_GET_UTIME();
+#ifndef _WIN32
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (tv.tv_sec * 1000000LL + tv.tv_usec);
 #else
-#error Unknown OS
+    const time_t epoch = (time_t)116444736000000000ULL;
+    FILETIME file_time;
+    ULARGE_INTEGER ularge;
+
+    GetSystemTimeAsFileTime(&file_time);
+    ularge.LowPart = file_time.dwLowDateTime;
+    ularge.HighPart = file_time.dwHighDateTime;
+    time_t tv_sec = (time_t)((ularge.QuadPart - epoch) / 10000000L);
+    time_t tv_usec = (time_t)(((ularge.QuadPart - epoch) % 10000000L) / 10);
+    return tv_sec*1000000 + tv_usec;
 #endif
     }
     

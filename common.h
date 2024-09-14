@@ -45,10 +45,9 @@
 #define __ST_COMMON_H__
 
 #include <stddef.h>
-#include <unistd.h>
 #include <sys/types.h>
-#include <sys/time.h>
-#include <setjmp.h>
+// #include <sys/time.h>
+// #include <setjmp.h>
 
 /* Enable assertions only if DEBUG is defined */
 #ifndef DEBUG
@@ -207,29 +206,6 @@ typedef struct _st_mutex {
 } _st_mutex_t;
 
 
-typedef struct _st_pollq {
-    _st_clist_t links;          /* For putting on io queue */
-    _st_thread_t  *thread;      /* Polling thread */
-    struct pollfd *pds;         /* Array of poll descriptors */
-    int npds;                   /* Length of the array */
-    int on_ioq;                 /* Is it on ioq? */
-} _st_pollq_t;
-
-
-typedef struct _st_eventsys_ops {
-    const char *name;                          /* Name of this event system */
-    int  val;                                  /* Type of this event system */
-    int  (*init)(void);                        /* Initialization */
-    void (*dispatch)(void);                    /* Dispatch function */
-    int  (*pollset_add)(struct pollfd *, int); /* Add descriptor set */
-    void (*pollset_del)(struct pollfd *, int); /* Delete descriptor set */
-    int  (*fd_new)(int);                       /* New descriptor allocated */
-    int  (*fd_close)(int);                     /* Descriptor closed */
-    int  (*fd_getlimit)(void);                 /* Descriptor hard limit */
-    void (*destroy)(void);                     /* Destroy the event object */
-} _st_eventsys_t;
-
-
 typedef struct _st_vp {
     _st_thread_t *idle_thread;  /* Idle thread for this vp */
     st_utime_t last_clock;      /* The last time we went into vp_check_clock() */
@@ -252,23 +228,12 @@ typedef struct _st_vp {
 } _st_vp_t;
 
 
-typedef struct _st_netfd {
-    int osfd;                   /* Underlying OS file descriptor */
-    int inuse;                  /* In-use flag */
-    void *private_data;         /* Per descriptor private data */
-    _st_destructor_t destructor; /* Private data destructor function */
-    void *aux_data;             /* Auxiliary data for internal use */
-    struct _st_netfd *next;     /* For putting on the free list */
-} _st_netfd_t;
-
-
 /*****************************************
  * Current vp, thread, and event system
  */
 
 extern __thread _st_vp_t        _st_this_vp;
 extern __thread _st_thread_t *_st_this_thread;
-extern __thread _st_eventsys_t *_st_eventsys;
 
 #define _ST_CURRENT_THREAD()            (_st_this_thread)
 #define _ST_SET_CURRENT_THREAD(_thread) (_st_this_thread = (_thread))
@@ -287,7 +252,6 @@ extern __thread _st_eventsys_t *_st_eventsys;
 #define _ST_SLEEPQ                      (_st_this_vp.sleep_q)
 #define _ST_SLEEPQ_SIZE                 (_st_this_vp.sleepq_size)
 
-#define _ST_VP_IDLE()                   (*_st_eventsys->dispatch)()
 
 
 /*****************************************
@@ -459,16 +423,12 @@ void _st_add_sleep_q(_st_thread_t *thread, st_utime_t timeout);
 void _st_del_sleep_q(_st_thread_t *thread);
 _st_stack_t *_st_stack_new(int stack_size);
 void _st_stack_free(_st_stack_t *ts);
-int _st_io_init(void);
 
 st_utime_t st_utime(void);
 _st_cond_t *st_cond_new(void);
 int st_cond_destroy(_st_cond_t *cvar);
 int st_cond_timedwait(_st_cond_t *cvar, st_utime_t timeout);
 int st_cond_signal(_st_cond_t *cvar);
-ssize_t st_read(_st_netfd_t *fd, void *buf, size_t nbyte, st_utime_t timeout);
-ssize_t st_write(_st_netfd_t *fd, const void *buf, size_t nbyte, st_utime_t timeout);
-int st_poll(struct pollfd *pds, int npds, st_utime_t timeout);
 _st_thread_t *st_thread_create(void *(*start)(void *arg), void *arg, int joinable, int stk_size);
 
 #endif /* !__ST_COMMON_H__ */

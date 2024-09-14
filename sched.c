@@ -42,7 +42,6 @@
  */
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 #include <time.h>
@@ -83,56 +82,6 @@ __thread st_utime_t _st_last_tset;       /* Last time it was fetched */
 
 // We should initialize the thread-local variable in st_init().
 extern __thread _st_clist_t _st_free_stacks;
-
-int st_poll(struct pollfd *pds, int npds, st_utime_t timeout)
-{
-    struct pollfd *pd;
-    struct pollfd *epd = pds + npds;
-    _st_pollq_t pq;
-    _st_thread_t *me = _ST_CURRENT_THREAD();
-    int n;
-    
-    if (me->flags & _ST_FL_INTERRUPT) {
-        me->flags &= ~_ST_FL_INTERRUPT;
-        errno = EINTR;
-        return -1;
-    }
-    
-    if ((*_st_eventsys->pollset_add)(pds, npds) < 0)
-        return -1;
-    
-    pq.pds = pds;
-    pq.npds = npds;
-    pq.thread = me;
-    pq.on_ioq = 1;
-    _ST_ADD_IOQ(pq);
-    if (timeout != ST_UTIME_NO_TIMEOUT)
-        _ST_ADD_SLEEPQ(me, timeout);
-    me->state = _ST_ST_IO_WAIT;
-    
-    _ST_SWITCH_CONTEXT(me);
-    
-    n = 0;
-    if (pq.on_ioq) {
-        /* If we timed out, the pollq might still be on the ioq. Remove it */
-        _ST_DEL_IOQ(pq);
-        (*_st_eventsys->pollset_del)(pds, npds);
-    } else {
-        /* Count the number of ready descriptors */
-        for (pd = pds; pd < epd; pd++) {
-            if (pd->revents)
-                n++;
-        }
-    }
-    
-    if (me->flags & _ST_FL_INTERRUPT) {
-        me->flags &= ~_ST_FL_INTERRUPT;
-        errno = EINTR;
-        return -1;
-    }
-    
-    return n;
-}
 
 
 void _st_vp_schedule(void)
@@ -176,10 +125,10 @@ int st_init(void)
     }
     
     /* We can ignore return value here */
-    st_set_eventsys(ST_EVENTSYS_DEFAULT);
+    // st_set_eventsys(ST_EVENTSYS_DEFAULT);
     
-    if (_st_io_init() < 0)
-        return -1;
+    // if (_st_io_init() < 0)
+    //     return -1;
 
     // Initialize the thread-local variables.
     ST_INIT_CLIST(&_st_free_stacks);
@@ -194,10 +143,11 @@ int st_init(void)
     ST_INIT_CLIST(&_ST_THREADQ);
 #endif
     
-    if ((*_st_eventsys->init)() < 0)
-        return -1;
+    // if ((*_st_eventsys->init)() < 0)
+    //     return -1;
     
-    _st_this_vp.pagesize = getpagesize();
+    // _st_this_vp.pagesize = getpagesize();
+    _st_this_vp.pagesize = 4096;
     _st_this_vp.last_clock = st_utime();
     
     /*
@@ -229,15 +179,6 @@ int st_init(void)
 }
 
 
-/*
- * Destroy this Virtual Processor
- */
-void st_destroy(void)
-{
-    (*_st_eventsys->destroy)();
-}
-
-
 #ifdef ST_SWITCH_CB
 st_switch_cb_t st_set_switch_in_cb(st_switch_cb_t cb)
 {
@@ -265,7 +206,7 @@ void *_st_idle_thread_start(void *arg)
     
     while (_st_active_count > 0) {
         /* Idle vp till I/O is ready or the smallest timeout expired */
-        _ST_VP_IDLE();
+        // _ST_VP_IDLE();
         
         /* Check sleep queue for expired threads */
         _st_vp_check_clock();
@@ -650,8 +591,8 @@ _st_thread_t *st_thread_create(void *(*start)(void *arg), void *arg, int joinabl
     thread = (_st_thread_t *) sp;
     
     /* Make stack 64-byte aligned */
-    if ((unsigned long)sp & 0x3f)
-        sp = sp - ((unsigned long)sp & 0x3f);
+    if ((unsigned long long)sp & 0x3f)
+        sp = sp - ((unsigned long long)sp & 0x3f);
     stack->sp = sp - _ST_STACK_PAD_SIZE;
 
     memset(thread, 0, sizeof(_st_thread_t));

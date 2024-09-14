@@ -45,12 +45,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/mman.h>
 #include "common.h"
 
 
 /* How much space to leave between the stacks, at each end */
 #define REDZONE	_ST_PAGE_SIZE
+#define MALLOC_STACK
 
 __thread _st_clist_t _st_free_stacks;
 __thread int _st_num_free_stacks = 0;
@@ -123,7 +123,7 @@ _st_stack_t *_st_stack_new(int stack_size)
 #endif
     
     if (extra) {
-        long offset = (random() % extra) & ~0xf;
+        long offset = (rand() % extra) & ~0xf;
         
         ts->stk_bottom += offset;
         ts->stk_top += offset;
@@ -193,7 +193,7 @@ int st_randomize_stacks(int on)
     
     _st_randomize_stacks = on;
     if (on)
-        srandom((unsigned int) st_utime());
+        srand((unsigned int) st_utime());
     
     return wason;
 }
