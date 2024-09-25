@@ -47,6 +47,7 @@
 #include <time.h>
 #include <errno.h>
 #include "common.h"
+#include "uv.h"
 
 /* merge from https://github.com/toffaletti/state-threads/commit/7f57fc9acc05e657bca1223f1e5b9b1a45ed929b */
 #ifndef NVALGRIND
@@ -82,6 +83,8 @@ __thread st_utime_t _st_last_tset;       /* Last time it was fetched */
 
 // We should initialize the thread-local variable in st_init().
 extern __thread _st_clist_t _st_free_stacks;
+
+__thread uv_loop_t *_libuv_loop;
 
 
 void _st_vp_schedule(void)
@@ -126,6 +129,7 @@ int st_init(void)
     
     /* We can ignore return value here */
     // st_set_eventsys(ST_EVENTSYS_DEFAULT);
+    _libuv_loop = uv_default_loop();
     
     // if (_st_io_init() < 0)
     //     return -1;
@@ -203,10 +207,27 @@ st_switch_cb_t st_set_switch_out_cb(st_switch_cb_t cb)
 void *_st_idle_thread_start(void *arg)
 {
     _st_thread_t *me = _ST_CURRENT_THREAD();
+    unsigned long timeout;
+    st_utime_t min_timeout;
     
     while (_st_active_count > 0) {
         /* Idle vp till I/O is ready or the smallest timeout expired */
         // _ST_VP_IDLE();
+
+        if (_ST_SLEEPQ == NULL) {
+            timeout = -1;
+        } else {
+            min_timeout = (_ST_SLEEPQ->due <= _ST_LAST_CLOCK) ? 0 : (_ST_SLEEPQ->due - _ST_LAST_CLOCK);
+            timeout = (int) (min_timeout / 1000);
+            if (timeout == 0) {
+                if (min_timeout > 0) {
+                    timeout = 1;
+                }
+            }
+        }
+        fprintf(stderr, "----------\n");
+        st_run(_libuv_loop, timeout);
+        fprintf(stderr, "===>%lu\n", timeout);
         
         /* Check sleep queue for expired threads */
         _st_vp_check_clock();

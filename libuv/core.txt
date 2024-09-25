@@ -1,0 +1,39 @@
+
+int st_run(uv_loop_t *loop, unsigned long timeout)
+{
+  int r;
+  r = uv__loop_alive(loop);
+  if (!r) {
+    uv_update_time(loop);
+  }
+
+  {
+    uv__process_reqs(loop);
+    uv__idle_invoke(loop);
+    uv__prepare_invoke(loop);
+
+    uv__metrics_inc_loop_count(loop);
+
+    if (pGetQueuedCompletionStatusEx)
+      uv__poll(loop, timeout);
+    else
+      uv__poll_wine(loop, timeout);
+
+    for (r = 0; r < 8 && loop->pending_reqs_tail != NULL; r++)
+      uv__process_reqs(loop);
+
+    uv__metrics_update_idle_time(loop);
+
+    uv__check_invoke(loop);
+    uv__process_endgames(loop);
+
+    uv_update_time(loop);
+    // uv__run_timers(loop);
+  }
+
+  if (loop->stop_flag != 0)
+    loop->stop_flag = 0;
+
+  return r;
+}
+
