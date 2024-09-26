@@ -71,7 +71,11 @@ typedef struct _st_jmp_buf {
      * Linux    __loongarch64           long[12]
      * Cygwin64 __amd64__/__x86_64__    long[8]
      */
+#ifdef _WIN32
     long long __jmpbuf[22];
+#else
+    long __jmpbuf[22];
+#endif
 } _st_jmp_buf_t[1];
 
 extern int _st_md_cxt_save(_st_jmp_buf_t env);
@@ -180,7 +184,7 @@ extern void _st_md_cxt_restore(_st_jmp_buf_t env, int val);
     #define MD_USE_BUILTIN_SETJMP
 
     #if defined(__amd64__) || defined(__x86_64__)
-        #define MD_GET_SP(_t) *((long long *)&((_t)->context[0].__jmpbuf[6]))
+        #define MD_GET_SP(_t) *((long *)&((_t)->context[0].__jmpbuf[6]))
     #else
         #error Unknown CPU architecture
     #endif
@@ -189,13 +193,43 @@ extern void _st_md_cxt_restore(_st_jmp_buf_t env, int val);
         ST_BEGIN_MACRO                             \
         if (MD_SETJMP((_thread)->context))         \
             _main();                                 \
-        MD_GET_SP(_thread) = (long long) (_sp);         \
+        MD_GET_SP(_thread) = (long) (_sp);         \
         ST_END_MACRO
 
     #define MD_GET_UTIME()            \
         struct timeval tv;              \
         (void) gettimeofday(&tv, NULL); \
         return (tv.tv_sec * 1000000LL + tv.tv_usec)
+
+#elif defined (_WIN32)
+
+    // #define MD_USE_BSD_ANON_MMAP
+    // #define MD_ACCEPT_NB_INHERITED
+    #define MD_HAVE_SOCKLEN_T
+
+    #if defined(__amd64__) || defined(__x86_64__)
+        #define MD_GET_SP(_t) *((long long *)&((_t)->context[0].__jmpbuf[6]))
+    #else
+        #error Unknown CPU architecture
+    #endif
+
+    #define MD_INIT_CONTEXT(_thread, _sp, _main)    \
+        ST_BEGIN_MACRO                              \
+        if (MD_SETJMP((_thread)->context))          \
+            _main();                                \
+        MD_GET_SP(_thread) = (long long) (_sp);     \
+        ST_END_MACRO
+
+    #define MD_GET_UTIME()                                  \
+        const time_t epoch = (time_t)116444736000000000ULL; \
+        FILETIME file_time;                                 \
+        ULARGE_INTEGER ularge;                              \
+        GetSystemTimeAsFileTime(&file_time);                \
+        ularge.LowPart = file_time.dwLowDateTime;           \
+        ularge.HighPart = file_time.dwHighDateTime;         \
+        time_t tv_sec = (time_t)((ularge.QuadPart - epoch) / 10000000L);            \
+        time_t tv_usec = (time_t)(((ularge.QuadPart - epoch) % 10000000L) / 10);    \
+        return tv_sec*1000000 + tv_usec;
 
 #else
     #error Unknown OS

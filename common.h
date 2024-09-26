@@ -46,8 +46,12 @@
 
 #include <stddef.h>
 #include <sys/types.h>
-// #include <sys/time.h>
-// #include <setjmp.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 
 /* Enable assertions only if DEBUG is defined */
 #ifndef DEBUG

@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <public.h>
+#include "public.h"
 st_cond_t cond;
 int a = 0;
 
@@ -38,7 +38,7 @@ void* start4(void *arg) {
 
 int main(int argc, char** argv)
 {
-	printf("=======%d %d %d\n", sizeof(int), sizeof(long), sizeof(long long));
+	printf("=======%ld %ld %ld\n", sizeof(int), sizeof(long), sizeof(long long));
 
 	printf("=======00\n");
 
