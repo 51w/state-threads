@@ -1,3 +1,6 @@
+#define __amd64__
+#pragma comment(lib, "libmd.lib")
+
 #include <stdio.h>
 #include "public.h"
 st_cond_t cond;
@@ -38,7 +41,7 @@ void* start4(void *arg) {
 
 int main(int argc, char** argv)
 {
-	printf("=======%ld %ld %ld\n", sizeof(int), sizeof(long), sizeof(long long));
+	printf("=======%zu %zu %zu\n", sizeof(int), sizeof(long), sizeof(long long));
 
 	printf("=======00\n");
 

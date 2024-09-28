@@ -1,5 +1,5 @@
 
 all:
-	gcc -c ../sync.c ../stk.c ../sched.c ../key.c ../md_cygwin64.S -DCYGWIN64 -I.
-	ar rcs libst.a *.o
+	gcc -c ../sync.c ../stk.c ../sched.c ../key.c ../md_cygwin64.S -I. -O2 
+	ar rcs libst.lib *.o
 	rm *.o

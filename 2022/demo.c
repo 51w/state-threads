@@ -1,6 +1,5 @@
-#define CYGWIN64
 #define __amd64__
-#pragma comment(lib, "libst.a")
+#pragma comment(lib, "libst.lib")
 
 #include <stdio.h>
 #include "../public.h"
