@@ -83,7 +83,7 @@ typedef struct _st_netfd *  st_netfd_t;
 typedef void (*st_switch_cb_t)(void);
 #endif
 
-extern int st_init(void);
+extern int st_init(void *h);
 
 #ifdef ST_SWITCH_CB
 extern st_switch_cb_t st_set_switch_in_cb(st_switch_cb_t cb);
