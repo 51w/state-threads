@@ -83,6 +83,10 @@ __thread st_utime_t _st_last_tset;       /* Last time it was fetched */
 // We should initialize the thread-local variable in st_init().
 extern __thread _st_clist_t _st_free_stacks;
 
+// set event
+__thread void *_st_event;
+extern int st_run(void *h, int timeout);
+
 
 void _st_vp_schedule(_st_thread_t* from)
 {
@@ -116,7 +120,7 @@ void _st_vp_schedule(_st_thread_t* from)
 /*
  * Initialize this Virtual Processor
  */
-int st_init(void)
+int st_init(void *h)
 {
     _st_thread_t *thread;
 
@@ -127,6 +131,7 @@ int st_init(void)
     
     /* We can ignore return value here */
     // st_set_eventsys(ST_EVENTSYS_DEFAULT);
+    _st_event = h;
     
     // if (_st_io_init() < 0)
     //     return -1;
@@ -204,10 +209,26 @@ st_switch_cb_t st_set_switch_out_cb(st_switch_cb_t cb)
 void *_st_idle_thread_start(void *arg)
 {
     _st_thread_t *me = _ST_CURRENT_THREAD();
-    
+
+    st_utime_t min_timeout;
+    int timeout = 0;
+
     while (_st_active_count > 0) {
         /* Idle vp till I/O is ready or the smallest timeout expired */
         // _ST_VP_IDLE();
+
+        if (_ST_SLEEPQ == NULL) {
+            timeout = -1;
+        } else {
+            min_timeout = (_ST_SLEEPQ->due <= _ST_LAST_CLOCK) ? 0 : (_ST_SLEEPQ->due - _ST_LAST_CLOCK);
+            timeout = (int) (min_timeout / 1000);
+            if (timeout == 0) {
+                if (min_timeout > 0) {
+                    timeout = 1;
+                }
+            }
+        }
+        st_run(_st_event, timeout);
         
         /* Check sleep queue for expired threads */
         _st_vp_check_clock();
@@ -329,7 +350,6 @@ void fcontext_entry(transfer_t t)
 {
 	_st_thread_t* vthread = (_st_thread_t*)t.data;
 	vthread->fcontext = t.fctx;
-
     //transfer_t vfrom = jump_fcontext(t.fctx, NULL);
     //_st_thread_t* vthread = (_st_thread_t*)vfrom.data;
 	//vthread->fcontext = vfrom.fctx;
@@ -604,8 +624,13 @@ _st_thread_t *st_thread_create(void *(*start)(void *arg), void *arg, int joinabl
     thread = (_st_thread_t *) sp;
     
     /* Make stack 64-byte aligned */
+#ifdef _WIN32
     if ((unsigned long long)sp & 0x3f)
         sp = sp - ((unsigned long long)sp & 0x3f);
+#else
+    if ((unsigned long)sp & 0x3f)
+        sp = sp - ((unsigned long)sp & 0x3f);
+#endif
     stack->sp = sp - _ST_STACK_PAD_SIZE;
 
     memset(thread, 0, sizeof(_st_thread_t));

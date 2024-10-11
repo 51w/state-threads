@@ -40,12 +40,7 @@
  * This file is derived directly from Netscape Communications Corporation,
  * and consists of extensive modifications made during the year(s) 1999-2000.
  */
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#include <sys/time.h>
-#endif
+
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>

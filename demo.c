@@ -1,6 +1,8 @@
 #include <stdio.h>
-#include <public.h>
+#include "public.h"
+#include "common.h"
 st_cond_t cond;
+int a = 0;
 
 void* start1(void *arg) {
 	for (int i = 0; i < 10; i++) {
@@ -21,7 +23,7 @@ void* start2(void *arg) {
 
 void* start3(void *arg) {
 	for (int i = 0; i < 10; i++) {
-        fprintf(stderr, "AAA-->%d=======\n", i);
+        fprintf(stderr, "AAA-->%d=======%d\n", i, ++a);
         
 		st_sleep(1);
 		st_cond_broadcast(cond);
@@ -29,16 +31,26 @@ void* start3(void *arg) {
 }
 void* start4(void *arg) {
 	for (int i = 0; i < 10; i++) {
-        fprintf(stderr, "BBB-->%d=======\n", i);
+		a *= 2;
+        fprintf(stderr, "BBB-->%d=======%d\n", i, a);
 		st_cond_wait(cond);
     }return NULL;
 }
 
+int st_run(void *h, int timeout)
+{
+	// printf("====%d %d===\n", (h==NULL), timeout);
+	usleep(timeout * 1000);
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
+	printf("=======%zu %zu %zu\n", sizeof(int), sizeof(long), sizeof(long long));
+
 	printf("=======00\n");
 
-    st_init();
+    st_init(NULL);
 	
 	cond = st_cond_new();
 
